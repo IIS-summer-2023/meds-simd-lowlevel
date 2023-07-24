@@ -9,7 +9,7 @@ ifdef DEBUG
 CFLAGS := -g -Wall -D$(PARAM) -DDEBUG
 OBJDIR := debug/$(PARAM)
 else
-CFLAGS := -O3 -Wall -D$(PARAM)
+CFLAGS := -O3 -Wall -D$(PARAM) -mavx2
 OBJDIR := build/$(PARAM)
 endif
 
