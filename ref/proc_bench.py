@@ -45,3 +45,6 @@ print(f"{name} & {keygen_time[len(keygen_time)>>1]:f} & {keygen_cyc[len(keygen_c
       f" & {sign_time[len(sign_time)>>1]:f} & {sign_cyc[len(sign_cyc)>>1]}" + 
       f" & {verify_time[len(verify_time)>>1]} & {verify_cyc[len(verify_cyc)>>1]} \\\\")
 
+# >> right shift by one bit
+# :d covertion to decimal number
+# :f  fix point number format (default 6 points)
