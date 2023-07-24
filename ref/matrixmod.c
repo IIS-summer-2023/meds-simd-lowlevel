@@ -1,10 +1,18 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "params.h"
-#include"matrixmod.h"
+#include <immintrin.h>
+#include<math.h>
 
-void pmod_mat_print(pmod_mat_t *M, int M_r, int M_c)
+#include "params.h"
+#include "matrixmod.h"
+
+/*reduction modulo operation(after multiplication/ addition might exceed number of bits it can hold)
+find methods for SIMD might be more or less efficient
+Gaussian or Multipilcation, which take the most time? Maximise the one which took the most time
+turn off frequency scaling?*/
+
+void pmod_mat_print(pmod_mat_t *M, int M_r, int M_c) //prime modulo matrix
 {
   pmod_mat_fprint(stdout, M, M_r, M_c);
 }
@@ -23,25 +31,114 @@ void pmod_mat_fprint(FILE *stream, pmod_mat_t *M, int M_r, int M_c)
 
 void pmod_mat_mul(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A_c, pmod_mat_t *B, int B_r, int B_c)
 {
-  GFq_t tmp[C_r*C_c];
+  // handle not multiple of 8
+  int num_of_instructions = ceil(C_r / 8); //multiple of 8
+  int remainder = C_r % 8;
+  int mask_arr[8] = {-1,-1,-1,-1,-1,-1,-1,-1};
+
+  if (remainder != 0)
+  {
+    for (int i = 0; i < 8 - remainder; i++)
+    {
+      mask_arr[remainder + i] = 1;
+    }
+  }
+
+  __m256i mask = _mm256_loadu_si256(mask_arr);
 
   for (int c = 0; c < C_c; c++)
+  {
     for (int r = 0; r < C_r; r++)
     {
       uint64_t val = 0;
+      __m256i vec_c = _mm256_setzero_si256();
 
-      for (int i = 0; i < A_r; i++)
-        val = (val + (uint64_t)pmod_mat_entry(A, A_r, A_c, r, i) * (uint64_t)pmod_mat_entry(B, B_r, B_c, i, c));
+      for (int i = 0; i < num_of_instructions; i++)
+      {
+        __m256i vec_a = _mm256_setr_epi32(
+          (uint64_t) pmod_mat_entry(A, A_r, A_c, r, 0+i*8),
+          (uint64_t) pmod_mat_entry(A, A_r, A_c, r, 1+i*8),
+          (uint64_t) pmod_mat_entry(A, A_r, A_c, r, 2+i*8),
+          (uint64_t) pmod_mat_entry(A, A_r, A_c, r, 3+i*8),
+          (uint64_t) pmod_mat_entry(A, A_r, A_c, r, 4+i*8),
+          (uint64_t) pmod_mat_entry(A, A_r, A_c, r, 5+i*8),
+          (uint64_t) pmod_mat_entry(A, A_r, A_c, r, 6+i*8),
+          (uint64_t) pmod_mat_entry(A, A_r, A_c, r, 7+i*8)
+        );
+        __m256i vec_b = _mm256_setr_epi32(
+          (uint64_t) pmod_mat_entry(B, B_r, B_c, 0+i*8, c),
+          (uint64_t) pmod_mat_entry(B, B_r, B_c, 1+i*8, c),
+          (uint64_t) pmod_mat_entry(B, B_r, B_c, 2+i*8, c),
+          (uint64_t) pmod_mat_entry(B, B_r, B_c, 3+i*8, c),
+          (uint64_t) pmod_mat_entry(B, B_r, B_c, 4+i*8, c),
+          (uint64_t) pmod_mat_entry(B, B_r, B_c, 5+i*8, c),
+          (uint64_t) pmod_mat_entry(B, B_r, B_c, 6+i*8, c),
+          (uint64_t) pmod_mat_entry(B, B_r, B_c, 7+i*8, c)
+        );
 
-      tmp[r*C_c + c] = val % MEDS_p;
+        if (remainder != 0 && i == num_of_instructions - 1)
+        {
+          uint64_t arr_vec_a[8] = {
+          pmod_mat_entry(A, A_r, A_c, r, 0+i*8),
+          pmod_mat_entry(A, A_r, A_c, r, 1+i*8),
+          pmod_mat_entry(A, A_r, A_c, r, 2+i*8),
+          pmod_mat_entry(A, A_r, A_c, r, 3+i*8),
+          pmod_mat_entry(A, A_r, A_c, r, 4+i*8),
+          pmod_mat_entry(A, A_r, A_c, r, 5+i*8),
+          pmod_mat_entry(A, A_r, A_c, r, 6+i*8),
+          pmod_mat_entry(A, A_r, A_c, r, 7+i*8)
+          };
+          uint64_t arr_vec_b[8] = {
+          pmod_mat_entry(B, B_r, B_c, 0+i*8, c),
+          pmod_mat_entry(B, B_r, B_c, 1+i*8, c),
+          pmod_mat_entry(B, B_r, B_c, 2+i*8, c),
+          pmod_mat_entry(B, B_r, B_c, 3+i*8, c),
+          pmod_mat_entry(B, B_r, B_c, 4+i*8, c),
+          pmod_mat_entry(B, B_r, B_c, 5+i*8, c),
+          pmod_mat_entry(B, B_r, B_c, 6+i*8, c),
+          pmod_mat_entry(B, B_r, B_c, 7+i*8, c)
+          };
+
+          __m256i vec_a = _mm256_maskload_epi32(arr_vec_a, mask);
+          __m256i vec_b = _mm256_maskload_epi32(arr_vec_b, mask);
+        }
+        __m256i vec_tmp = _mm256_mullo_epi32(vec_a, vec_b);
+
+        vec_c = _mm256_add_epi32(vec_c, vec_tmp);
+      }
+      
+      int *ptr = (int *)&vec_c;
+
+      for (int i = 0; i < 8; i++)
+      {
+        val += ptr[i];
+      }
+
+      val = val % MEDS_p;
+
+      pmod_mat_set_entry(C, C_r, C_c, r, c, val);
     }
-
-  for (int c = 0; c < C_c; c++)
-    for (int r = 0; r < C_r; r++)
-      pmod_mat_set_entry(C, C_r, C_c, r, c, tmp[r*C_c + c]);
+  }
 }
+//   GFq_t tmp[C_r*C_c]; // uint16_t tmp[C_r*C_c]
 
-int pmod_mat_syst_ct(pmod_mat_t *M, int M_r, int M_c)
+//   for (int c = 0; c < C_c; c++)
+//     for (int r = 0; r < C_r; r++)
+//     {
+//       uint64_t val = 0;
+
+//       for (int i = 0; i < A_r; i++)
+//         val = (val + (uint64_t)pmod_mat_entry(A, A_r, A_c, r, i) * (uint64_t)pmod_mat_entry(B, B_r, B_c, i, c));
+
+//       tmp[r*C_c + c] = val % MEDS_p; // modulo operation after multiplication
+//     }
+
+//   for (int c = 0; c < C_c; c++)
+//     for (int r = 0; r < C_r; r++)
+//       pmod_mat_set_entry(C, C_r, C_c, r, c, tmp[r*C_c + c]);
+// }
+
+int pmod_mat_syst_ct(pmod_mat_t *M, int M_r, int M_c) //systematc form
 {
   if (pmod_mat_row_echelon_ct(M, M_r, M_c) < 0)
     return -1;
@@ -208,4 +305,3 @@ int pmod_mat_inv(pmod_mat_t *B, pmod_mat_t *A, int A_r, int A_c)
 
   return ret;
 }
-
