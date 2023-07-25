@@ -44,7 +44,7 @@ void pmod_mat_mul(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A
     }
   }
 
-  __m256i mask = _mm256_loadu_si256(mask_arr);
+  __m256i mask = _mm256_loadu_si256((const __m256i *)mask_arr);
 
   for (int c = 0; c < C_c; c++)
   {
@@ -99,8 +99,24 @@ void pmod_mat_mul(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A
           pmod_mat_entry(B, B_r, B_c, 7+i*8, c)
           };
 
-          __m256i vec_a = _mm256_maskload_epi32(arr_vec_a, mask);
-          __m256i vec_b = _mm256_maskload_epi32(arr_vec_b, mask);
+          __m256i vec_a = _mm256_maskload_epi32((const int *)arr_vec_a, mask);
+          __m256i vec_b = _mm256_maskload_epi32((const int *)arr_vec_b, mask);
+
+          __m256i vec_tmp = _mm256_mullo_epi32(vec_a, vec_b);
+
+          vec_c = _mm256_add_epi32(vec_c, vec_tmp);
+          int *ptr = (int *)&vec_c;
+
+          for (int i = 0; i < 8; i++)
+          {
+            val += ptr[i];
+          }
+
+          val = val % MEDS_p;
+
+          pmod_mat_set_entry(C, C_r, C_c, r, c, val);
+
+          continue;
         }
         __m256i vec_tmp = _mm256_mullo_epi32(vec_a, vec_b);
 
@@ -305,3 +321,4 @@ int pmod_mat_inv(pmod_mat_t *B, pmod_mat_t *A, int A_r, int A_c)
 
   return ret;
 }
+
