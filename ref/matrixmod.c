@@ -35,85 +35,65 @@ void pmod_mat_fprint(FILE *stream, pmod_mat_t *M, int M_r, int M_c)
 
 void pmod_mat_mul(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A_c, pmod_mat_t *B, int B_r, int B_c)
 {
-  GFq_t tmp[C_r*C_c]; // uint16_t tmp[C_r*C_c]
+  GFq_t tmp[C_r*C_c]; // uint32_t tmp[C_r*C_c]
 
-  int num_of_instructions = ceil(C_r/8.0); //C_r / 8.0
-  int remainder = C_r % 8;
-  int mask_arr[8] = {-1,-1,-1,-1,-1,-1,-1,-1};
+  int num_of_instructions = ceil(C_c/8.0);
 
+  //create mask
+  int remainder = C_c % 8;
+  int mask_1[8] = {-1,-1,-1,-1,-1,-1,-1,-1};
+  __m256i non_mask = _mm256_loadu_si256((const __m256i *)mask_1);
   if (remainder != 0)
   {
     for (int i = 0; i < 8 - remainder; i++)
-    {
-      mask_arr[remainder + i] = 1;
-    }
+      mask_1[remainder + i] = 1;
   }
+  __m256i mask = _mm256_loadu_si256((const __m256i *)mask_1);
 
-  __m256i mask = _mm256_loadu_si256((const __m256i *)mask_arr);
-
-  for (int c = 0; c < C_c; c++)
+  for (int ins_i = 0; ins_i < num_of_instructions; ins_i++)
   {
-    for (int r = 0; r < C_r; r++)
+    if ((remainder != 0) && (ins_i == num_of_instructions - 1))
     {
-      uint64_t val = 0;
-      __m256i vec_e = _mm256_setzero_si256();
-      __m256i vec_tmp = _mm256_setzero_si256();
-
-      for (int ins_i = 0; ins_i < num_of_instructions; ins_i++)
+      for (int i = 0; i < A_r; i++)
       {
-        if ((remainder != 0) && (ins_i == num_of_instructions - 1))
+        __m256i vec_total = _mm256_setzero_si256();
+        for (int j = 0; j < A_c; j++)
         {
-          uint32_t arr_vec_c[8];
-          uint32_t arr_vec_d[8];
+          __m256i vec_a = _mm256_set1_epi32(A[i*A_c + j]);
+          __m256i vec_b = _mm256_loadu_si256((const __m256i *)(B + j*B_c + ins_i*8));
+          __m256i vec_c = _mm256_mullo_epi32(vec_a, vec_b);
 
-          for (int element = 0; element < remainder; element++)
-          {
-            arr_vec_c[element] = pmod_mat_entry(A, A_r, A_c, r, element+ins_i*8);
-            arr_vec_d[element] = pmod_mat_entry(B, B_r, B_c, element+ins_i*8, c);
-          }
-
-          __m256i vec_c = _mm256_maskload_epi32((int const *)arr_vec_c, mask);
-          __m256i vec_d = _mm256_maskload_epi32((int const *)arr_vec_d, mask);
-
-          vec_tmp = _mm256_mullo_epi32(vec_c, vec_d);
-
-          vec_e = _mm256_add_epi32(vec_e, vec_tmp);
+          vec_total = _mm256_add_epi32(vec_c, vec_total);
         }
-
-        else
-        {
-          uint32_t arr_a_sliced[8];
-          uint32_t arr_b_sliced[8];
-          for (int element = 0; element < 8; element++)
-          {
-            arr_a_sliced[element] = pmod_mat_entry(A, A_r, A_c, r, element+ins_i*8);
-            arr_b_sliced[element] = pmod_mat_entry(B, B_r, B_c, element+ins_i*8, c);
-          }
-
-          __m256i vec_a = _mm256_loadu_si256((const __m256i *)arr_a_sliced);
-          __m256i vec_b = _mm256_loadu_si256((const __m256i *)arr_b_sliced);
-
-          vec_tmp = _mm256_mullo_epi32(vec_a, vec_b);
-
-          vec_e = _mm256_add_epi32(vec_e, vec_tmp);
-        }
+        _mm256_maskstore_epi32((int *)tmp + i*C_c + ins_i*8, mask, vec_total);
       }
-      
-      int *ptr_vec_e = (int *)&vec_e;
+    }
 
-      for (int i = 0; i < 8; i++)
+    else
+    { 
+      for (int i = 0; i < A_r; i++)
       {
-        val += ptr_vec_e[i];
-      }
+        __m256i vec_total = _mm256_setzero_si256();
+        for (int j = 0; j < A_c; j++)
+        {
+          __m256i vec_a = _mm256_set1_epi32(A[i*A_c + j]);
+          __m256i vec_b = _mm256_loadu_si256((const __m256i *)(B + j*B_c + ins_i*8));
+          __m256i vec_c = _mm256_mullo_epi32(vec_a, vec_b);
 
-      tmp[r*C_c + c] = val % MEDS_p;
+          vec_total = _mm256_add_epi32(vec_c, vec_total);
+        }
+        _mm256_maskstore_epi32((int *)tmp + i*C_c + ins_i*8, non_mask, vec_total);
+      }
     }
   }
+
   for (int c = 0; c < C_c; c++)
     for (int r = 0; r < C_r; r++)
+    {
+      tmp[r*C_c + c] = tmp[r*C_c + c] % MEDS_p;
       pmod_mat_set_entry(C, C_r, C_c, r, c, tmp[r*C_c + c]);
+    }
 }
-//   GFq_t tmp[C_r*C_c]; // uint16_t tmp[C_r*C_c]
 
 //   for (int c = 0; c < C_c; c++)
 //     for (int r = 0; r < C_r; r++)
