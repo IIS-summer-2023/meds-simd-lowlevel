@@ -22,6 +22,7 @@
 
 #define CEILING(x,y) (((x) + (y) - 1) / (y))
 
+double osfreq(void);
 
 int crypto_sign_keypair(
     unsigned char *pk,
@@ -32,11 +33,16 @@ int crypto_sign_keypair(
 
   randombytes(delta, MEDS_sec_seed_bytes);
 
+  // long long static time = 0;
+  // long long static total_time = 0;
+  // double freq = osfreq();
 
-  pmod_mat_t G_data[MEDS_k * MEDS_m * MEDS_n * MEDS_s];
-  pmod_mat_t *G[MEDS_s];
+  pmod_mat_t G_data[MEDS_k * MEDS_m * MEDS_n * MEDS_s] __attribute__((aligned(4)));
+  pmod_mat_t *G[MEDS_s] __attribute__((aligned(4)));
+  // pmod_mat_t G_data[MEDS_k * MEDS_m * MEDS_n * MEDS_s];
+  // pmod_mat_t *G[MEDS_s];
 
-  for (int i = 0; i < MEDS_s; i++)
+  for (int i = 0; i < MEDS_s; i++)  //Array that store pointers of all pk
     G[i] = &G_data[i * MEDS_k * MEDS_m * MEDS_n];
 
   uint8_t sigma_G0[MEDS_pub_seed_bytes];
@@ -55,13 +61,17 @@ int crypto_sign_keypair(
 
   LOG_MAT(G[0], MEDS_k, MEDS_m*MEDS_n);
 
-  pmod_mat_t A_inv_data[MEDS_s * MEDS_m * MEDS_m];
-  pmod_mat_t B_inv_data[MEDS_s * MEDS_m * MEDS_m];
+  pmod_mat_t A_inv_data[MEDS_s * MEDS_m * MEDS_m] __attribute__((aligned(4))); //Allocate
+  pmod_mat_t B_inv_data[MEDS_s * MEDS_m * MEDS_m] __attribute__((aligned(4))); //Allocate
+  // pmod_mat_t A_inv_data[MEDS_s * MEDS_m * MEDS_m];
+  // pmod_mat_t B_inv_data[MEDS_s * MEDS_m * MEDS_m];
 
-  pmod_mat_t *A_inv[MEDS_s];
-  pmod_mat_t *B_inv[MEDS_s];
+  pmod_mat_t *A_inv[MEDS_s] __attribute__((aligned(4)));
+  pmod_mat_t *B_inv[MEDS_s] __attribute__((aligned(4)));
+  // pmod_mat_t *A_inv[MEDS_s] __attribute__((aligned(4)));
+  // pmod_mat_t *B_inv[MEDS_s] __attribute__((aligned(4)));
 
-  for (int i = 0; i < MEDS_s; i++)
+  for (int i = 0; i < MEDS_s; i++) //Array that store all pointers of sk
   {
     A_inv[i] = &A_inv_data[i * MEDS_m * MEDS_m];
     B_inv[i] = &B_inv_data[i * MEDS_n * MEDS_n];
@@ -69,8 +79,10 @@ int crypto_sign_keypair(
 
   for (int i = 1; i < MEDS_s; i++)
   {
-    pmod_mat_t A[MEDS_m * MEDS_m] = {0};
-    pmod_mat_t B[MEDS_n * MEDS_n] = {0};
+    pmod_mat_t A[MEDS_m * MEDS_m] __attribute__((aligned(4))) = {0};
+    pmod_mat_t B[MEDS_n * MEDS_n] __attribute__((aligned(4))) = {0};
+    // pmod_mat_t A[MEDS_m * MEDS_m] = {0};
+    // pmod_mat_t B[MEDS_n * MEDS_n] = {0};
 
     while (1 == 1) // redo generation for this index until success
     {
@@ -82,9 +94,10 @@ int crypto_sign_keypair(
           sigma, MEDS_sec_seed_bytes,
           3);
 
-      pmod_mat_t Ti[MEDS_k * MEDS_k];
+      pmod_mat_t Ti[MEDS_k * MEDS_k] __attribute__((aligned(4))); //Allocate
+      // pmod_mat_t Ti[MEDS_k * MEDS_k];
 
-      rnd_inv_matrix(Ti, MEDS_k, MEDS_k, sigma_Ti, MEDS_sec_seed_bytes);
+      rnd_inv_matrix(Ti, MEDS_k, MEDS_k, sigma_Ti, MEDS_sec_seed_bytes); //Assign something to Ti
 
       GFq_t Amm;
 
@@ -99,17 +112,58 @@ int crypto_sign_keypair(
       LOG_MAT(Ti, MEDS_k, MEDS_k);
       LOG_VAL(Amm);
 
+      // printf("Ti:\n");
+      // for (int r = 0; r < MEDS_k; r++)
+      // {
+      //   printf("[");
+      //   for (int c = 0; c < MEDS_k-1; c++)
+      //     printf("%4d ", pmod_mat_entry(Ti, MEDS_k, MEDS_k, r, c));
+      //   printf("%4d ", pmod_mat_entry(Ti, MEDS_k, MEDS_k, r, MEDS_k-1));
+      //   printf("]\n");
+      // }
+      // printf("\n");
 
-      pmod_mat_t G0prime[MEDS_k * MEDS_m * MEDS_n];
+      // printf("G[0]:\n");
+      // for (int r = 0; r < MEDS_k; r++)
+      // {
+      //   printf("[");
+      //   for (int c = 0; c < MEDS_m * MEDS_n-1; c++)
+      //     printf("%4d ", pmod_mat_entry(G[0], MEDS_k, MEDS_m * MEDS_n, r, c));
+      //   printf("%4d ", pmod_mat_entry(G[0], MEDS_k, MEDS_m * MEDS_n, r, MEDS_m * MEDS_n-1));
+      //   printf("]\n");
+      // }
+      // printf("\n");
 
+      pmod_mat_t G0prime[MEDS_k * MEDS_m * MEDS_n] __attribute__((aligned(4))); //Allocate
+      // pmod_mat_t G0prime[MEDS_k * MEDS_m * MEDS_n];
+      
+      // time = -cpucycles();
       pmod_mat_mul(G0prime, MEDS_k, MEDS_m * MEDS_n,
           Ti, MEDS_k, MEDS_k,
           G[0], MEDS_k, MEDS_m * MEDS_n);
+      // time += cpucycles();
+      // total_time += time;
+
 
       LOG_MAT(G0prime, MEDS_k, MEDS_m * MEDS_n);
 
+      // printf("AFT G0prime:\n");
+      // for (int r = 0; r < MEDS_k; r++)
+      // {
+      //   printf("[");
+      //   for (int c = 0; c < MEDS_m * MEDS_n-1; c++)
+      //     printf("%4d ", pmod_mat_entry(G0prime, MEDS_k, MEDS_m * MEDS_n, r, c));
+      //   printf("%4d ", pmod_mat_entry(G0prime, MEDS_k, MEDS_m * MEDS_n, r, MEDS_m * MEDS_n-1));
+      //   printf("]\n");
+      // }
+      // printf("\n");
+      int res;
+      time = -cpucycles();
+      res = solve(A, B_inv[i], G0prime, Amm);
+      time += cpucycles();
+      total_time += time;
 
-      if (solve(A, B_inv[i], G0prime, Amm) < 0)
+      if (res < 0)
       {
         LOG("no sol");
         continue;
@@ -132,8 +186,10 @@ int crypto_sign_keypair(
       LOG_MAT_FMT(B, MEDS_n, MEDS_n, "B[%i]", i);
       LOG_MAT_FMT(B_inv[i], MEDS_n, MEDS_n, "B_inv[%i]", i);
 
-
+      time = -cpucycles();
       pi(G[i], A, B, G[0]);
+      time += cpucycles();
+      total_time += time;
 
 
       if (pmod_mat_syst_ct(G[i], MEDS_k, MEDS_m*MEDS_n) != 0)
@@ -148,7 +204,7 @@ int crypto_sign_keypair(
       break;
     }
   }
-
+  printf("total time mul: %f   (%llu cycles)\n", total_time / freq, total_time);
 
   // copy pk data
   {
@@ -232,7 +288,7 @@ int crypto_sign(
   // skip secret seed
   sk += MEDS_sec_seed_bytes;
 
-  pmod_mat_t G_0[MEDS_k * MEDS_m * MEDS_n];
+  pmod_mat_t G_0[MEDS_k * MEDS_m * MEDS_n]; //Allocate
 
 
   rnd_sys_mat(G_0, MEDS_k, MEDS_m*MEDS_n, sk, MEDS_pub_seed_bytes);
@@ -240,13 +296,13 @@ int crypto_sign(
   sk += MEDS_pub_seed_bytes;
 
 
-  pmod_mat_t A_inv_data[MEDS_s * MEDS_m * MEDS_m];
-  pmod_mat_t B_inv_data[MEDS_s * MEDS_n * MEDS_n];
+  pmod_mat_t A_inv_data[MEDS_s * MEDS_m * MEDS_m]; //Allocate
+  pmod_mat_t B_inv_data[MEDS_s * MEDS_n * MEDS_n]; //Allocate
 
   pmod_mat_t *A_inv[MEDS_s];
   pmod_mat_t *B_inv[MEDS_s];
 
-  for (int i = 0; i < MEDS_s; i++)
+  for (int i = 0; i < MEDS_s; i++) //Array that store all pointers of sk
   {
     A_inv[i] = &A_inv_data[i * MEDS_m * MEDS_m];
     B_inv[i] = &B_inv_data[i * MEDS_n * MEDS_n];
@@ -304,13 +360,13 @@ int crypto_sign(
   uint8_t *sigma = &stree[MEDS_st_seed_bytes * SEED_TREE_ADDR(MEDS_seed_tree_height, 0)];
 
 
-  pmod_mat_t A_tilde_data[MEDS_t * MEDS_m * MEDS_m];
-  pmod_mat_t B_tilde_data[MEDS_t * MEDS_m * MEDS_m];
+  pmod_mat_t A_tilde_data[MEDS_t * MEDS_m * MEDS_m]; //Allocate
+  pmod_mat_t B_tilde_data[MEDS_t * MEDS_m * MEDS_m]; //Allocate
 
   pmod_mat_t *A_tilde[MEDS_t];
   pmod_mat_t *B_tilde[MEDS_t];
 
-  for (int i = 0; i < MEDS_t; i++)
+  for (int i = 0; i < MEDS_t; i++) //Array that store all pointers
   {
     A_tilde[i] = &A_tilde_data[i * MEDS_m * MEDS_m];
     B_tilde[i] = &B_tilde_data[i * MEDS_n * MEDS_n];
@@ -321,7 +377,7 @@ int crypto_sign(
 
   for (int i = 0; i < MEDS_t; i++)
   {
-    pmod_mat_t G_tilde_ti[MEDS_k * MEDS_m * MEDS_m];
+    pmod_mat_t G_tilde_ti[MEDS_k * MEDS_m * MEDS_m]; //Allocate
 
     while (1 == 1)
     {
@@ -397,7 +453,7 @@ int crypto_sign(
     if (h[i] > 0)
     {
       {
-        pmod_mat_t mu[MEDS_m*MEDS_m];
+        pmod_mat_t mu[MEDS_m*MEDS_m]; //Allocate
 
         pmod_mat_mul(mu, MEDS_m, MEDS_m, A_tilde[i], MEDS_m, MEDS_m, A_inv[h[i]], MEDS_m, MEDS_m);
 
@@ -410,7 +466,7 @@ int crypto_sign(
       bs_finalize(&bs);
 
       {
-        pmod_mat_t nu[MEDS_n*MEDS_n];
+        pmod_mat_t nu[MEDS_n*MEDS_n]; //Allocate
 
         pmod_mat_mul(nu, MEDS_n, MEDS_n, B_inv[h[i]], MEDS_n, MEDS_n, B_tilde[i], MEDS_n, MEDS_n);
 
@@ -443,10 +499,10 @@ int crypto_sign_open(
 {
   LOG_HEX(sm, smlen);
 
-  pmod_mat_t G_data[MEDS_k*MEDS_m*MEDS_n * MEDS_s];
+  pmod_mat_t G_data[MEDS_k*MEDS_m*MEDS_n * MEDS_s]; //Allocate
   pmod_mat_t *G[MEDS_s];
 
-  for (int i = 0; i < MEDS_s; i++)
+  for (int i = 0; i < MEDS_s; i++) //Array that stores all pointers
     G[i] = &G_data[i * MEDS_k * MEDS_m * MEDS_n];
 
 
@@ -561,8 +617,8 @@ int crypto_sign_open(
             &sigma[i*MEDS_st_seed_bytes], MEDS_st_seed_bytes,
             3);
 
-        pmod_mat_t A_tilde[MEDS_m*MEDS_m];
-        pmod_mat_t B_tilde[MEDS_n*MEDS_n];
+        pmod_mat_t A_tilde[MEDS_m*MEDS_m]; //Allocate
+        pmod_mat_t B_tilde[MEDS_n*MEDS_n]; //Allocate
 
         LOG_VEC(sigma_A_tilde_i, MEDS_sec_seed_bytes);
         rnd_inv_matrix(A_tilde, MEDS_m, MEDS_m, sigma_A_tilde_i, MEDS_st_seed_bytes);
