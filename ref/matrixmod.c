@@ -278,3 +278,4 @@ int pmod_mat_inv(pmod_mat_t *B, pmod_mat_t *A, int A_r, int A_c)
 
   return ret;
 }
+
