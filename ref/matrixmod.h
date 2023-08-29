@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 
 #include "params.h"
 
@@ -16,10 +17,13 @@ void pmod_mat_print(pmod_mat_t *M, int M_r, int M_c);
 void pmod_mat_fprint(FILE *stream, pmod_mat_t *M, int M_r, int M_c);
 
 void pmod_mat_mul(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A_c, pmod_mat_t *B, int B_r, int B_c);
+void pmod_mat_mul_simd(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A_c, pmod_mat_t *B, int B_r, int B_c);
 
 int pmod_mat_syst_ct(pmod_mat_t *M, int M_r, int M_c);
 int pmod_mat_row_echelon_ct(pmod_mat_t *M, int M_r, int M_c);
 int pmod_mat_back_substitution_ct(pmod_mat_t *M, int M_r, int M_c);
+
+int pmod_mat_syst_ct_simd(pmod_mat_t *M, int M_r, int M_c);
 
 int pmod_mat_inv(pmod_mat_t *B, pmod_mat_t *A, int A_r, int A_c);
 
