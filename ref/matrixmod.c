@@ -35,6 +35,25 @@ void pmod_mat_fprint(FILE *stream, pmod_mat_t *M, int M_r, int M_c)
 
 void pmod_mat_mul(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A_c, pmod_mat_t *B, int B_r, int B_c)
 {
+  GFq_t tmp [C_r*C_c];
+  for (int c = 0; c < C_c; c++)
+    for (int r = 0; r < C_r; r++)
+    {
+      uint64_t val = 0;
+
+      for (int i = 0; i < A_r; i++)
+        val = (val + (uint64_t)pmod_mat_entry(A, A_r, A_c, r, i) * (uint64_t)pmod_mat_entry(B, B_r, B_c, i, c));
+
+      tmp[r*C_c + c] = val % MEDS_p; // modulo operation after multiplication
+    }
+
+  for (int c = 0; c < C_c; c++)
+    for (int r = 0; r < C_r; r++)
+      pmod_mat_set_entry(C, C_r, C_c, r, c, tmp[r*C_c + c]);
+}
+
+void pmod_mat_mul_simd(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A_c, pmod_mat_t *B, int B_r, int B_c)
+{
   GFq_t tmp[C_r*C_c]; // uint32_t tmp[C_r*C_c]
 
   int num_of_instructions = ceil(C_c/8.0);
@@ -94,22 +113,6 @@ void pmod_mat_mul(pmod_mat_t *C, int C_r, int C_c, pmod_mat_t *A, int A_r, int A
       pmod_mat_set_entry(C, C_r, C_c, r, c, tmp[r*C_c + c]);
     }
 }
-
-//   for (int c = 0; c < C_c; c++)
-//     for (int r = 0; r < C_r; r++)
-//     {
-//       uint64_t val = 0;
-
-//       for (int i = 0; i < A_r; i++)
-//         val = (val + (uint64_t)pmod_mat_entry(A, A_r, A_c, r, i) * (uint64_t)pmod_mat_entry(B, B_r, B_c, i, c));
-
-//       tmp[r*C_c + c] = val % MEDS_p; // modulo operation after multiplication
-//     }
-
-//   for (int c = 0; c < C_c; c++)
-//     for (int r = 0; r < C_r; r++)
-//       pmod_mat_set_entry(C, C_r, C_c, r, c, tmp[r*C_c + c]);
-// }
 
 int pmod_mat_syst_ct(pmod_mat_t *M, int M_r, int M_c) //systematic form
 {
@@ -211,6 +214,39 @@ int pmod_mat_back_substitution_ct(pmod_mat_t *M, int M_r, int M_c)
     }
 
   return 0;
+}
+
+int pmod_mat_syst_ct_simd(pmod_mat_t *M, int M_r, int M_c)
+{
+  pmod_mat_t tmp_M_right[M_r *(M_c - M_r)];
+  pmod_mat_t M_left[M_r * M_r];
+  pmod_mat_t M_right[M_r *(M_c - M_r)];
+  pmod_mat_t M_left_inv[M_r * M_r];
+  pmod_mat_t identity_mat[M_r * M_r];
+
+  for (int r = 0; r < M_r; r++)
+    for (int c = 0; c < M_c; c++)
+      pmod_mat_set_entry(identity_mat, M_r, M_r, r, c, r==c ? 1 : 0);
+
+  for (int r = 0; r < M_r; r++)
+  {
+    memcpy(&M_left[r * M_r], &M[r * M_c], M_r * sizeof(GFq_t));
+    memcpy(&tmp_M_right[r * (M_c - M_r)], &M[r * M_c + M_r],(M_c - M_r) * sizeof(GFq_t));
+  }
+
+  int ret = pmod_mat_inv(M_left_inv, M_left, M_r, M_r);
+
+  pmod_mat_mul_simd(M_right, M_r, (M_c - M_r),
+        M_left_inv, M_r, M_r,
+        tmp_M_right, M_r, (M_c - M_r));
+
+  for (int r = 0; r < M_r; r++)
+  {
+    memcpy(&M[r * M_c], &identity_mat[r * M_r], M_r * sizeof(GFq_t));
+    memcpy(&M[r * M_c + M_r], &M_right[r * (M_c - M_r)], (M_c - M_r) * sizeof(GFq_t));
+  }
+
+  return ret;
 }
 
 GFq_t GF_inv(GFq_t val)
