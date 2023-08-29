@@ -417,3 +417,17 @@ void pi(pmod_mat_t *Gout, pmod_mat_t *A, pmod_mat_t *B, pmod_mat_t *G)
   }
 }
 
+void pi_simd(pmod_mat_t *Gout, pmod_mat_t *A, pmod_mat_t *B, pmod_mat_t *G)
+{
+  pmod_mat_t *G0sub[MEDS_k];
+  G_mat_init(G, G0sub);
+
+  pmod_mat_t *Gsub[MEDS_k];
+  G_mat_init(Gout, Gsub);
+
+  for (int i = 0; i < MEDS_k; i++)
+  {
+    pmod_mat_mul_simd(Gsub[i], MEDS_m, MEDS_n, A, MEDS_m, MEDS_m, G0sub[i], MEDS_m, MEDS_n);
+    pmod_mat_mul_simd(Gsub[i], MEDS_m, MEDS_n, Gsub[i], MEDS_m, MEDS_n, B, MEDS_n, MEDS_n);
+  }
+}
