@@ -340,6 +340,23 @@ def gen_api(par_set):
 
 #define CRYPTO_ALGNAME "{par_set.name}"
 
+int crypto_sign_keypair_simd(
+    unsigned char *pk,
+    unsigned char *sk
+  );
+
+int crypto_sign_simd(
+    unsigned char *sm, unsigned long long *smlen,
+    const unsigned char *m, unsigned long long mlen,
+    const unsigned char *sk
+  );
+
+int crypto_sign_open_simd(
+    unsigned char *m, unsigned long long *mlen,
+    const unsigned char *sm, unsigned long long smlen,
+    const unsigned char *pk
+  );
+
 int crypto_sign_keypair(
     unsigned char *pk,
     unsigned char *sk
@@ -391,7 +408,8 @@ def gen_param(parset):
     print()
   
     print(f"{ind}#define MEDS_p {param.q}")
-    print(f"{ind}#define GFq_t uint{ceil(log(param.q, 256))*8}_t")
+    # print(f"{ind}#define GFq_t uint{ceil(log(param.q, 256))*8}_t")
+    print(f"{ind}#define GFq_t uint32_t")
     print(f"{ind}#define GFq_bits {ceil(log(param.q, 2))}")
     print(f"{ind}#define GFq_bytes {ceil(ceil(log(param.q, 2))/8)}")
   
